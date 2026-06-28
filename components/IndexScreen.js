@@ -12,7 +12,9 @@ import {
   BackHandler
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
+import { API_BASE_URL } from '../store/authSlice';
+import { addNotification, fetchNotifications } from '../store/notificationSlice';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
 import Animated, {
   useSharedValue,
@@ -26,6 +28,7 @@ import Animated, {
 import HistoryScreen from './HistoryScreen';
 import ProfileScreen from './ProfileScreen';
 import QRScanner from './QRScanner';
+import NotificationScreen from './NotificationScreen';
 
 const { width } = Dimensions.get('window');
 
@@ -119,7 +122,9 @@ const ProfileTabIcon = ({ color }) => (
 );
 
 export default function IndexScreen() {
-  const { user } = useSelector((state) => state.auth);
+  const dispatch = useDispatch();
+  const { user, accessToken } = useSelector((state) => state.auth);
+  const { unreadCount } = useSelector((state) => state.notifications);
   const [isCheckedIn, setIsCheckedIn] = useState(false);
   const [checkInTime, setCheckInTime] = useState(null);
   const [activeTab, setActiveTab] = useState('Home');
@@ -163,6 +168,68 @@ export default function IndexScreen() {
 
     return () => backHandler.remove();
   }, [activeTab]);
+
+  // 1. Stable SSE connection effect (depends only on accessToken value changes)
+  useEffect(() => {
+    if (!accessToken) return;
+
+    let xhr = null;
+    let reconnectTimeout = null;
+
+    const connectSSE = () => {
+      const sseUrl = `${API_BASE_URL}/api/main/notifications/stream/?token=${accessToken}`;
+      xhr = new XMLHttpRequest();
+      xhr.open('GET', sseUrl);
+      
+      let offset = 0;
+      xhr.onreadystatechange = () => {
+        if (xhr.readyState === 3 || xhr.readyState === 4) {
+          const text = xhr.responseText;
+          if (!text) return;
+          const chunks = text.substring(offset).split('\n\n');
+          offset = text.length;
+
+          for (const chunk of chunks) {
+            const trimmed = chunk.trim();
+            if (!trimmed) continue;
+            if (trimmed.startsWith('data:')) {
+              try {
+                const dataStr = trimmed.substring(5).trim();
+                const data = JSON.parse(dataStr);
+                if (data.status === 'connected') {
+                  console.log('Mobile SSE connected successfully.');
+                  continue;
+                }
+                dispatch(addNotification(data));
+              } catch (err) {
+                console.error('Failed to parse mobile SSE payload', err);
+              }
+            }
+          }
+        }
+      };
+
+      xhr.onerror = (err) => {
+        console.error('Mobile SSE connection error. Reconnecting in 10s...', err);
+        xhr.abort();
+        reconnectTimeout = setTimeout(connectSSE, 10000);
+      };
+    };
+
+    connectSSE();
+
+    return () => {
+      if (xhr) xhr.abort();
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+    };
+  }, [accessToken]);
+
+  // 2. Fetch notifications once on mount/token change
+  useEffect(() => {
+    if (accessToken) {
+      dispatch(fetchNotifications());
+    }
+  }, [accessToken, dispatch]);
 
   const handleCheckInToggle = () => {
     // Press animation
@@ -238,9 +305,17 @@ export default function IndexScreen() {
                 <Text style={styles.userNameText}>{fullName}</Text>
               </View>
             </View>
-            <TouchableOpacity style={styles.notificationBtn} activeOpacity={0.7}>
+            <TouchableOpacity 
+              style={styles.notificationBtn} 
+              activeOpacity={0.7}
+              onPress={() => setActiveTab('Notifications')}
+            >
               <BellIcon color="#6236FF" />
-              <View style={styles.notificationBadge} />
+              {unreadCount > 0 && (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>{unreadCount}</Text>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
 
@@ -401,6 +476,8 @@ export default function IndexScreen() {
             setActiveTab('Home');
           }}
         />
+      ) : activeTab === 'Notifications' ? (
+        <NotificationScreen onBack={() => setActiveTab('Home')} />
       ) : (
         <View style={styles.fallbackScreen}>
           <Text style={styles.fallbackTitle}>{activeTab} Screen</Text>
@@ -409,7 +486,7 @@ export default function IndexScreen() {
       )}
 
       {/* Premium Navigation Footer */}
-      {activeTab !== 'Scan' && (
+      {activeTab !== 'Scan' && activeTab !== 'Notifications' && (
         <View style={styles.tabBar}>
           <TouchableOpacity
           style={[styles.tabItem, activeTab === 'Home' && styles.activeTabBg]}
@@ -507,12 +584,21 @@ const styles = StyleSheet.create({
   },
   notificationBadge: {
     position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    top: 6,
+    right: 6,
     backgroundColor: '#EF4444',
+    borderRadius: 10,
+    width: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  notificationBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontFamily: 'Urbanist_800ExtraBold',
   },
   statusCard: {
     backgroundColor: '#6236FF',

@@ -6,7 +6,7 @@ import { Platform } from 'react-native';
 // 10.0.2.2:8000 points to localhost from the Android emulator.
 // localhost:8000 points to localhost from iOS simulator.
 // Replace with your local machine's IP (e.g. 192.168.x.x) if testing on a physical device.
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || process.env.PUBLIC_API_URL || (Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://localhost:8000');
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || process.env.PUBLIC_API_URL || 'https://zotiy-197-211-58-46.free.pinggy.net';
 console.log("API_BASE_URL", process.env.EXPO_PUBLIC_API_URL)
 // Async Thunk: Load credentials stored in Async Storage on app startup
 export const loadStoredAuth = createAsyncThunk(
