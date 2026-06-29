@@ -149,6 +149,39 @@ export const logoutUser = createAsyncThunk(
   }
 );
 
+// Async Thunk: Fetch User Profile (including Employee profile details)
+export const fetchUserProfile = createAsyncThunk(
+  'auth/fetchUserProfile',
+  async (_, { getState, rejectWithValue }) => {
+    try {
+      const { auth } = getState();
+      const token = auth.accessToken;
+      if (!token) return null;
+
+      const response = await fetch(`${API_BASE_URL}/api/users/profile/`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'ngrok-skip-browser-warning': 'true',
+          'Bypass-Tunnel-Reminder': 'true',
+        },
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch profile');
+      }
+
+      // Update AsyncStorage
+      await AsyncStorage.setItem('@user_data', JSON.stringify(data));
+      return data;
+    } catch (err) {
+      return rejectWithValue(err.message);
+    }
+  }
+);
+
 const authSlice = createSlice({
   name: 'auth',
   initialState: {
@@ -163,6 +196,12 @@ const authSlice = createSlice({
   reducers: {
     clearError: (state) => {
       state.error = null;
+    },
+    updateUser: (state, action) => {
+      state.user = action.payload;
+      AsyncStorage.setItem('@user_data', JSON.stringify(action.payload)).catch(err => {
+        console.error('Failed to update storage user_data', err);
+      });
     },
   },
   extraReducers: (builder) => {
@@ -221,9 +260,16 @@ const authSlice = createSlice({
         state.refreshToken = null;
         state.isAuthenticated = false;
         state.error = null;
+      })
+      
+      // fetchUserProfile
+      .addCase(fetchUserProfile.fulfilled, (state, action) => {
+        if (action.payload) {
+          state.user = action.payload;
+        }
       });
   },
 });
 
-export const { clearError } = authSlice.actions;
+export const { clearError, updateUser } = authSlice.actions;
 export default authSlice.reducer;

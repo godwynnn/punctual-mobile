@@ -157,11 +157,19 @@ export default function ProfileScreen() {
             </View>
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Work Office</Text>
-              <Text style={styles.infoValue}>San Francisco HQ</Text>
+              <Text style={styles.infoValue}>{user?.employee?.organization?.name || 'Not assigned'}</Text>
             </View>
             <View style={[styles.infoRow, styles.noBorder]}>
               <Text style={styles.infoLabel}>Shift Schedule</Text>
-              <Text style={styles.infoValue}>09:00 AM - 05:00 PM</Text>
+              <Text style={styles.infoValue}>
+                {user?.employee?.shift ? (
+                  `${user.employee.shift.name} (${user.employee.shift.start_time.slice(0, 5)} - ${user.employee.shift.end_time.slice(0, 5)})`
+                ) : user?.employee?.organization ? (
+                  user.employee.organization.start_time ? (
+                    `Office Start: ${user.employee.organization.start_time.slice(0, 5)} (Duration: ${user.employee.organization.duration || 'Open'} hrs)`
+                  ) : '24/7 Hours'
+                ) : 'Not assigned'}
+              </Text>
             </View>
           </View>
         </View>

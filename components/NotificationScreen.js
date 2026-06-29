@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchNotifications, markAllRead } from '../store/notificationSlice';
-import { API_BASE_URL } from '../store/authSlice';
+import { API_BASE_URL, updateUser } from '../store/authSlice';
 import Svg, { Path } from 'react-native-svg';
 
 const BackArrowIcon = ({ color = '#111827' }) => (
@@ -45,6 +45,9 @@ export default function NotificationScreen({ onBack }) {
         throw new Error(data.error || 'Failed to accept invitation');
       }
       Alert.alert('Success', data.message);
+      if (data.user) {
+        dispatch(updateUser(data.user));
+      }
       dispatch(fetchNotifications());
     } catch (err) {
       Alert.alert('Error', err.message);
@@ -68,6 +71,9 @@ export default function NotificationScreen({ onBack }) {
         throw new Error(data.error || 'Failed to decline invitation');
       }
       Alert.alert('Declined', data.message);
+      if (data.user) {
+        dispatch(updateUser(data.user));
+      }
       dispatch(fetchNotifications());
     } catch (err) {
       Alert.alert('Error', err.message);
@@ -91,32 +97,44 @@ export default function NotificationScreen({ onBack }) {
         <Text style={styles.cardMsg}>{item.message}</Text>
 
         {isInvite && (
-          <View style={styles.actionsRow}>
-            <TouchableOpacity
-              onPress={() => handleAcceptInvite(item.organization_id, item.id)}
-              disabled={!!progress}
-              style={[styles.btnAccept, progress && styles.btnDisabled]}
-              activeOpacity={0.8}
-            >
-              {progress === 'accepting' ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <Text style={styles.btnText}>Accept Invite</Text>
-              )}
-            </TouchableOpacity>
+          <View style={{ marginTop: 12 }}>
+            {item.invite_status === 'active' ? (
+              <View style={styles.statusJoinedTag}>
+                <Text style={styles.statusJoinedText}>Joined</Text>
+              </View>
+            ) : item.invite_status === 'declined' ? (
+              <View style={styles.statusDeclinedTag}>
+                <Text style={styles.statusDeclinedText}>Declined</Text>
+              </View>
+            ) : (
+              <View style={styles.actionsRow}>
+                <TouchableOpacity
+                  onPress={() => handleAcceptInvite(item.organization_id, item.id)}
+                  disabled={!!progress}
+                  style={[styles.btnAccept, progress && styles.btnDisabled]}
+                  activeOpacity={0.8}
+                >
+                  {progress === 'accepting' ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.btnText}>Accept Invite</Text>
+                  )}
+                </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={() => handleDeclineInvite(item.organization_id, item.id)}
-              disabled={!!progress}
-              style={[styles.btnDecline, progress && styles.btnDisabled]}
-              activeOpacity={0.8}
-            >
-              {progress === 'declining' ? (
-                <ActivityIndicator size="small" color="#EF4444" />
-              ) : (
-                <Text style={styles.declineText}>Decline</Text>
-              )}
-            </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => handleDeclineInvite(item.organization_id, item.id)}
+                  disabled={!!progress}
+                  style={[styles.btnDecline, progress && styles.btnDisabled]}
+                  activeOpacity={0.8}
+                >
+                  {progress === 'declining' ? (
+                    <ActivityIndicator size="small" color="#EF4444" />
+                  ) : (
+                    <Text style={styles.declineText}>Decline</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         )}
       </View>
@@ -273,6 +291,30 @@ const styles = StyleSheet.create({
   declineText: {
     fontFamily: 'Urbanist_700Bold',
     fontSize: 12,
+    color: '#EF4444',
+  },
+  statusJoinedTag: {
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderRadius: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    alignSelf: 'flex-start',
+  },
+  statusDeclinedTag: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderRadius: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    alignSelf: 'flex-start',
+  },
+  statusJoinedText: {
+    fontFamily: 'Urbanist_700Bold',
+    fontSize: 11,
+    color: '#10B981',
+  },
+  statusDeclinedText: {
+    fontFamily: 'Urbanist_700Bold',
+    fontSize: 11,
     color: '#EF4444',
   },
 });

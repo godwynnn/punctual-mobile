@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
+import { fetch as streamFetch } from 'expo/fetch';
 import {
   StyleSheet,
   Text,
@@ -9,11 +10,14 @@ import {
   Dimensions,
   FlatList,
   RefreshControl,
-  BackHandler
+  BackHandler,
+  Alert,
+  Platform
 } from 'react-native';
+import * as Location from 'expo-location';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDispatch, useSelector } from 'react-redux';
-import { API_BASE_URL } from '../store/authSlice';
+import { API_BASE_URL, fetchUserProfile } from '../store/authSlice';
 import { addNotification, fetchNotifications } from '../store/notificationSlice';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
 import Animated, {
@@ -129,13 +133,59 @@ export default function IndexScreen() {
   const [checkInTime, setCheckInTime] = useState(null);
   const [activeTab, setActiveTab] = useState('Home');
   const [refreshing, setRefreshing] = useState(false);
+  const [isClockActionLoading, setIsClockActionLoading] = useState(false);
+  const [currentCoords, setCurrentCoords] = useState(null);
+
+  // Sync isCheckedIn state with backend user profile data on load/update
+  useEffect(() => {
+    if (user && user.employee && user.employee.today_attendance) {
+      const today = user.employee.today_attendance;
+      if (today.check_in && !today.check_out) {
+        setIsCheckedIn(true);
+        setCheckInTime(today.check_in);
+      } else {
+        setIsCheckedIn(false);
+        setCheckInTime(null);
+      }
+    } else {
+      setIsCheckedIn(false);
+      setCheckInTime(null);
+    }
+  }, [user]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    setTimeout(() => {
+    Promise.all([
+      dispatch(fetchUserProfile()).unwrap(),
+      dispatch(fetchNotifications()).unwrap()
+    ]).catch(err => {
+      console.error('Refresh error:', err);
+    }).finally(() => {
       setRefreshing(false);
-    }, 1500);
-  }, []);
+    });
+  }, [dispatch]);
+
+  const formatTime12h = (timeString) => {
+    if (!timeString) return '09:00 AM';
+    const parts = timeString.split(':');
+    if (parts.length < 2) return timeString;
+    let hours = parseInt(parts[0], 10);
+    const minutes = parts[1];
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    const strHours = hours < 10 ? '0' + hours : hours;
+    return `${strHours}:${minutes} ${ampm}`;
+  };
+
+  let targetCheckInTime = '09:00 AM';
+  if (user && user.employee) {
+    if (user.employee.shift && user.employee.shift.start_time) {
+      targetCheckInTime = formatTime12h(user.employee.shift.start_time);
+    } else if (user.employee.organization && user.employee.organization.start_time) {
+      targetCheckInTime = formatTime12h(user.employee.organization.start_time);
+    }
+  }
 
   const fullName = user
     ? `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'Alex Smith'
@@ -169,60 +219,90 @@ export default function IndexScreen() {
     return () => backHandler.remove();
   }, [activeTab]);
 
-  // 1. Stable SSE connection effect (depends only on accessToken value changes)
+  // 1. Stable SSE connection effect using Expo Fetch ReadableStream reader
   useEffect(() => {
-    if (!accessToken) return;
+    const token = accessToken;
+    if (!token) return;
 
-    let xhr = null;
+    let isMounted = true;
     let reconnectTimeout = null;
+    let reader = null;
 
-    const connectSSE = () => {
-      const sseUrl = `${API_BASE_URL}/api/main/notifications/stream/?token=${accessToken}`;
-      xhr = new XMLHttpRequest();
-      xhr.open('GET', sseUrl);
-      
-      let offset = 0;
-      xhr.onreadystatechange = () => {
-        if (xhr.readyState === 3 || xhr.readyState === 4) {
-          const text = xhr.responseText;
-          if (!text) return;
-          const chunks = text.substring(offset).split('\n\n');
-          offset = text.length;
+    const connectSSE = async () => {
+      const sseUrl = `${API_BASE_URL}/api/main/notifications/stream/?token=${token}`;
+      // console.log(sseUrl)
+      try {
+        const response = await streamFetch(sseUrl, {
+          method: 'GET',
+          headers: {
+            'Accept': 'text/event-stream',
+          },
+        });
 
-          for (const chunk of chunks) {
-            const trimmed = chunk.trim();
-            if (!trimmed) continue;
-            if (trimmed.startsWith('data:')) {
-              try {
-                const dataStr = trimmed.substring(5).trim();
-                const data = JSON.parse(dataStr);
-                if (data.status === 'connected') {
-                  console.log('Mobile SSE connected successfully.');
-                  continue;
+        if (!response.body) {
+          throw new Error('Response body is not readable');
+        }
+
+        reader = response.body.getReader();
+        let buffer = '';
+
+        while (isMounted) {
+          const { value, done } = await reader.read();
+          if (done) break;
+
+          if (value) {
+            let chunk = '';
+            if (typeof TextDecoder !== 'undefined') {
+              chunk = new TextDecoder('utf-8').decode(value);
+            } else {
+              for (let i = 0; i < value.length; i++) {
+                chunk += String.fromCharCode(value[i]);
+              }
+            }
+
+            buffer += chunk;
+            const parts = buffer.split('\n\n');
+            buffer = parts.pop() || '';
+
+            for (const part of parts) {
+              const trimmed = part.trim();
+              if (!trimmed) continue;
+              if (trimmed.startsWith('data:')) {
+                try {
+                  const dataStr = trimmed.substring(5).trim();
+                  const data = JSON.parse(dataStr);
+                  if (data.status === 'connected') {
+                    console.log('Mobile SSE connected via fetch stream.');
+                    continue;
+                  }
+                  dispatch(addNotification(data));
+                } catch (err) {
+                  console.error('Failed to parse mobile SSE payload', err);
                 }
-                dispatch(addNotification(data));
-              } catch (err) {
-                console.error('Failed to parse mobile SSE payload', err);
               }
             }
           }
         }
-      };
-
-      xhr.onerror = (err) => {
-        console.error('Mobile SSE connection error. Reconnecting in 10s...', err);
-        xhr.abort();
-        reconnectTimeout = setTimeout(connectSSE, 10000);
-      };
+      } catch (err) {
+        if (isMounted) {
+          console.error('Mobile SSE connection error via fetch. Reconnecting in 10s...', err);
+          reconnectTimeout = setTimeout(connectSSE, 10000);
+        }
+      }
     };
 
     connectSSE();
 
     return () => {
-      if (xhr) xhr.abort();
+      isMounted = false;
+      if (reader) {
+        try {
+          reader.cancel();
+        } catch (e) { }
+      }
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };
-  }, [accessToken]);
+  }, [accessToken, dispatch]);
 
   // 2. Fetch notifications once on mount/token change
   useEffect(() => {
@@ -231,42 +311,172 @@ export default function IndexScreen() {
     }
   }, [accessToken, dispatch]);
 
-  const handleCheckInToggle = () => {
+  // 3. Request location permissions, check location services, and watch position on mount
+  useEffect(() => {
+    let subscription = null;
+    let isMounted = true;
+
+    const checkAndRequestLocation = async () => {
+      try {
+        // Check if device location services are enabled
+        const providerStatus = await Location.getProviderStatusAsync();
+        if (!providerStatus.locationServicesEnabled) {
+          if (Platform.OS === 'android') {
+            try {
+              await Location.enableNetworkProviderAsync();
+            } catch (err) {
+              console.warn('User declined to enable location provider services:', err);
+            }
+          } else {
+            Alert.alert(
+              'Location Services Off',
+              'Please enable location services (GPS) in your device settings to use clock-in/out features.'
+            );
+          }
+        }
+
+        // Request foreground permissions
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          // Start watching position
+          if (isMounted) {
+            subscription = await Location.watchPositionAsync(
+              {
+                accuracy: Location.Accuracy.High,
+                timeInterval: 5000,   // Update every 5 seconds
+                distanceInterval: 2,   // Or when moving more than 2 meters
+              },
+              (location) => {
+                // console.log(location)
+                if (isMounted && location.coords) {
+                  const lat = parseFloat(location.coords.latitude);
+                  const lng = parseFloat(location.coords.longitude);
+                  setCurrentCoords({ latitude: lat, longitude: lng });
+                }
+              }
+            );
+          }
+        } else {
+          Alert.alert(
+            'Permission Required',
+            'Location permission is required to verify your location. Please grant it in your app settings.'
+          );
+        }
+      } catch (error) {
+        console.error('Error verifying location services/permissions on login:', error);
+      }
+    };
+
+    if (accessToken) {
+      checkAndRequestLocation();
+    }
+
+    return () => {
+      isMounted = false;
+      if (subscription) {
+        subscription.remove();
+      }
+    };
+  }, [accessToken]);
+
+  const handleCheckInToggle = async () => {
+    if (isClockActionLoading) return;
+
     // Press animation
     buttonScale.value = withSequence(
       withSpring(0.92, { damping: 5 }),
       withSpring(1, { damping: 5 })
     );
 
-    const now = new Date();
-    const formattedTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    try {
+      setIsClockActionLoading(true);
 
-    if (!isCheckedIn) {
-      setIsCheckedIn(true);
-      setCheckInTime(formattedTime);
+      let lat = null;
+      let lng = null;
 
-      // Append new check-in to list
-      const newActivity = {
-        id: Math.random().toString(),
-        type: 'Clock In',
-        time: `Today, ${formattedTime}`,
-        status: now.getHours() < 9 ? 'On Time' : 'Late',
-        border: '#6236FF'
-      };
-      setActivities(prev => [newActivity, ...prev]);
-    } else {
-      setIsCheckedIn(false);
-      setCheckInTime(null);
+      if (currentCoords) {
+        lat = currentCoords.latitude;
+        lng = currentCoords.longitude;
+      } else {
+        // Fallback if coordinates are not cached yet
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert(
+            'Location Permission Denied',
+            'You must grant location permissions to perform a check-in/out.'
+          );
+          setIsClockActionLoading(false);
+          return;
+        }
 
-      // Append check-out to list
-      const newActivity = {
-        id: Math.random().toString(),
-        type: 'Clock Out',
-        time: `Today, ${formattedTime}`,
-        status: 'On Time',
-        border: '#8E9AA6'
-      };
-      setActivities(prev => [newActivity, ...prev]);
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+          timeout: 8000
+        });
+        lat = parseFloat(location.coords.latitude);
+        lng = parseFloat(location.coords.longitude);
+        setCurrentCoords({ latitude: lat, longitude: lng });
+      }
+
+      console.log(lat, lng)
+
+      // 3. Fire API request to backend manual clock endpoint
+      const response = await fetch(`${API_BASE_URL}/api/employee/manual-clock/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+          'ngrok-skip-browser-warning': 'true',
+          'Bypass-Tunnel-Reminder': 'true',
+        },
+        body: JSON.stringify({
+          latitude: lat,
+          longitude: lng
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to submit attendance.');
+      }
+
+      // 4. Update UI states based on returned action (clock_in vs clock_out)
+      if (data.action === 'clock_in') {
+        setIsCheckedIn(true);
+        setCheckInTime(data.time);
+
+        const newActivity = {
+          id: Math.random().toString(),
+          type: 'Clock In',
+          time: `Today, ${data.time}`,
+          status: data.status_label || 'On Time',
+          border: '#6236FF'
+        };
+        setActivities(prev => [newActivity, ...prev]);
+        Alert.alert('Checked In', data.message || 'Clocked in successfully.');
+      } else {
+        setIsCheckedIn(false);
+        setCheckInTime(null);
+
+        const newActivity = {
+          id: Math.random().toString(),
+          type: 'Clock Out',
+          time: `Today, ${data.time}`,
+          status: 'On Time',
+          border: '#8E9AA6'
+        };
+        setActivities(prev => [newActivity, ...prev]);
+        Alert.alert('Checked Out', data.message || 'Clocked out successfully.');
+      }
+
+      // Pull latest user profile to keep data consistent
+      dispatch(fetchUserProfile());
+
+    } catch (err) {
+      Alert.alert('Attendance Failed', err.message);
+    } finally {
+      setIsClockActionLoading(false);
     }
   };
 
@@ -305,17 +515,17 @@ export default function IndexScreen() {
                 <Text style={styles.userNameText}>{fullName}</Text>
               </View>
             </View>
-            <TouchableOpacity 
-              style={styles.notificationBtn} 
+            <TouchableOpacity
+              style={styles.notificationBtn}
               activeOpacity={0.7}
               onPress={() => setActiveTab('Notifications')}
             >
               <BellIcon color="#6236FF" />
-              {unreadCount > 0 && (
+              {unreadCount > 0 ? (
                 <View style={styles.notificationBadge}>
                   <Text style={styles.notificationBadgeText}>{unreadCount}</Text>
                 </View>
-              )}
+              ) : null}
             </TouchableOpacity>
           </View>
 
@@ -330,15 +540,28 @@ export default function IndexScreen() {
             <Text style={styles.statusSubtext}>
               {isCheckedIn
                 ? `You clocked in today at ${checkInTime}`
-                : 'You should clock in by 09:00 AM'
+                : `You should clock in by ${targetCheckInTime}`
               }
             </Text>
 
+            {currentCoords ? (
+              <View style={styles.gpsStatusWrapper}>
+                <View style={styles.gpsDotActive} />
+                <Text style={styles.gpsStatusText}>GPS Active</Text>
+              </View>
+            ) : (
+              <View style={styles.gpsStatusWrapper}>
+                <View style={styles.gpsDotInactive} />
+                <Text style={styles.gpsStatusText}>Acquiring GPS...</Text>
+              </View>
+            )}
+
             <Animated.View style={animatedButtonStyle}>
               <TouchableOpacity
-                style={[styles.clockButton, isCheckedIn ? styles.clockButtonOut : styles.clockButtonIn]}
+                style={[styles.clockButton, isCheckedIn ? styles.clockButtonOut : styles.clockButtonIn, isClockActionLoading && { opacity: 0.6 }]}
                 onPress={handleCheckInToggle}
                 activeOpacity={0.9}
+                disabled={isClockActionLoading}
               >
                 <View style={styles.clockButtonContent}>
                   {isCheckedIn ? (
@@ -351,7 +574,7 @@ export default function IndexScreen() {
                     </Svg>
                   )}
                   <Text style={[styles.clockButtonText, isCheckedIn ? styles.textRed : styles.textPurple]}>
-                    {isCheckedIn ? 'Clock Out Now' : 'Clock In Now'}
+                    {isClockActionLoading ? 'Locating...' : (isCheckedIn ? 'Clock Out Now' : 'Clock In Now')}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -489,40 +712,40 @@ export default function IndexScreen() {
       {activeTab !== 'Scan' && activeTab !== 'Notifications' && (
         <View style={styles.tabBar}>
           <TouchableOpacity
-          style={[styles.tabItem, activeTab === 'Home' && styles.activeTabBg]}
-          onPress={() => setActiveTab('Home')}
-          activeOpacity={0.8}
-        >
-          <HomeTabIcon color={activeTab === 'Home' ? '#6236FF' : '#8A94A6'} />
-          {activeTab === 'Home' && <Text style={styles.activeTabText}>Home</Text>}
-        </TouchableOpacity>
+            style={[styles.tabItem, activeTab === 'Home' && styles.activeTabBg]}
+            onPress={() => setActiveTab('Home')}
+            activeOpacity={0.8}
+          >
+            <HomeTabIcon color={activeTab === 'Home' ? '#6236FF' : '#8A94A6'} />
+            {activeTab === 'Home' && <Text style={styles.activeTabText}>Home</Text>}
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === 'Scan' && styles.activeTabBg]}
-          onPress={() => setActiveTab('Scan')}
-          activeOpacity={0.8}
-        >
-          <ScanTabIcon color={activeTab === 'Scan' ? '#6236FF' : '#8A94A6'} />
-          {activeTab === 'Scan' && <Text style={styles.activeTabText}>Scan</Text>}
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === 'Scan' && styles.activeTabBg]}
+            onPress={() => setActiveTab('Scan')}
+            activeOpacity={0.8}
+          >
+            <ScanTabIcon color={activeTab === 'Scan' ? '#6236FF' : '#8A94A6'} />
+            {activeTab === 'Scan' && <Text style={styles.activeTabText}>Scan</Text>}
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === 'History' && styles.activeTabBg]}
-          onPress={() => setActiveTab('History')}
-          activeOpacity={0.8}
-        >
-          <HistoryTabIcon color={activeTab === 'History' ? '#6236FF' : '#8A94A6'} />
-          {activeTab === 'History' && <Text style={styles.activeTabText}>History</Text>}
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === 'History' && styles.activeTabBg]}
+            onPress={() => setActiveTab('History')}
+            activeOpacity={0.8}
+          >
+            <HistoryTabIcon color={activeTab === 'History' ? '#6236FF' : '#8A94A6'} />
+            {activeTab === 'History' && <Text style={styles.activeTabText}>History</Text>}
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === 'Profile' && styles.activeTabBg]}
-          onPress={() => setActiveTab('Profile')}
-          activeOpacity={0.8}
-        >
-          <ProfileTabIcon color={activeTab === 'Profile' ? '#6236FF' : '#8A94A6'} />
-          {activeTab === 'Profile' && <Text style={styles.activeTabText}>Profile</Text>}
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === 'Profile' && styles.activeTabBg]}
+            onPress={() => setActiveTab('Profile')}
+            activeOpacity={0.8}
+          >
+            <ProfileTabIcon color={activeTab === 'Profile' ? '#6236FF' : '#8A94A6'} />
+            {activeTab === 'Profile' && <Text style={styles.activeTabText}>Profile</Text>}
+          </TouchableOpacity>
         </View>
       )}
     </SafeAreaView>
@@ -637,8 +860,40 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: 'rgba(255, 255, 255, 0.8)',
     marginTop: 6,
-    marginBottom: 20,
+    marginBottom: 12,
     textAlign: 'center',
+  },
+  gpsStatusWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    alignSelf: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  gpsDotActive: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
+    marginRight: 6,
+  },
+  gpsDotInactive: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#F59E0B',
+    marginRight: 6,
+  },
+  gpsStatusText: {
+    fontFamily: 'Urbanist_700Bold',
+    fontSize: 10,
+    color: '#FFFFFF',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   clockButton: {
     width: width - 88,
