@@ -12,7 +12,8 @@ import {
   RefreshControl,
   BackHandler,
   Alert,
-  Platform
+  Platform,
+  AppState
 } from 'react-native';
 import * as Location from 'expo-location';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -192,11 +193,65 @@ export default function IndexScreen() {
     : 'Alex Smith';
 
   // Seed list with activity history matching the design image
-  const [activities, setActivities] = useState([
-    { id: '1', type: 'Clock In', time: 'Yesterday, 08:55 AM', status: 'On Time', border: '#6236FF' },
-    { id: '2', type: 'Clock Out', time: 'Yesterday, 05:02 PM', status: 'On Time', border: '#8E9AA6' },
-    { id: '3', type: 'Clock In', time: 'Monday, 09:15 AM', status: 'Late', border: '#EF4444' },
-  ]);
+  const [activities, setActivities] = useState([]);
+
+  const fetchAttendanceHistory = async () => {
+    if (!accessToken) return;
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/attendance/history/`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
+          'Bypass-Tunnel-Reminder': 'true'
+        }
+      });
+      const data = await response.json();
+      if (response.ok && Array.isArray(data)) {
+        const formatted = data.map(item => {
+          const dateStr = item.date;
+          
+          let checkInTimeStr = '';
+          if (item.check_in) {
+            const checkInLocal = new Date(item.check_in);
+            checkInTimeStr = checkInLocal.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          }
+
+          let checkOutTimeStr = '';
+          if (item.check_out) {
+            const checkOutLocal = new Date(item.check_out);
+            checkOutTimeStr = checkOutLocal.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          }
+
+          const events = [];
+          if (item.check_in) {
+            events.push({
+              id: `${item.id}-in`,
+              type: item.method === 'qr' ? 'Clock In (QR)' : 'Clock In',
+              time: `${dateStr}, ${checkInTimeStr}`,
+              status: item.status.charAt(0).toUpperCase() + item.status.slice(1),
+              border: item.status === 'late' ? '#EF4444' : '#6236FF'
+            });
+          }
+          if (item.check_out) {
+            events.push({
+              id: `${item.id}-out`,
+              type: item.method === 'qr' ? 'Clock Out (QR)' : 'Clock Out',
+              time: `${dateStr}, ${checkOutTimeStr}`,
+              status: 'On Time',
+              border: '#8E9AA6'
+            });
+          }
+          return events;
+        }).flat();
+        
+        setActivities(formatted);
+      }
+    } catch (err) {
+      console.error('Error fetching attendance history:', err);
+    }
+  };
 
   // Shared value for button scale animation
   const buttonScale = useSharedValue(1);
@@ -218,6 +273,13 @@ export default function IndexScreen() {
 
     return () => backHandler.remove();
   }, [activeTab]);
+
+  // Fetch attendance history when access token is available
+  useEffect(() => {
+    if (accessToken) {
+      fetchAttendanceHistory();
+    }
+  }, [accessToken]);
 
   // 1. Stable SSE connection effect using Expo Fetch ReadableStream reader
   useEffect(() => {
@@ -338,8 +400,35 @@ export default function IndexScreen() {
         // Request foreground permissions
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status === 'granted') {
-          // Start watching position
           if (isMounted) {
+            // 1. Instantly get last known position (takes milliseconds)
+            try {
+              const lastKnown = await Location.getLastKnownPositionAsync({});
+              if (lastKnown && lastKnown.coords && isMounted) {
+                const lat = parseFloat(lastKnown.coords.latitude);
+                const lng = parseFloat(lastKnown.coords.longitude);
+                setCurrentCoords({ latitude: lat, longitude: lng });
+              }
+            } catch (err) {
+              console.warn('Error fetching last known position:', err);
+            }
+
+            // 2. Fetch a fast current position with Balanced accuracy as a quick backup
+            try {
+              const quickLoc = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.Balanced,
+                timeout: 3000
+              });
+              if (quickLoc && quickLoc.coords && isMounted) {
+                const lat = parseFloat(quickLoc.coords.latitude);
+                const lng = parseFloat(quickLoc.coords.longitude);
+                setCurrentCoords({ latitude: lat, longitude: lng });
+              }
+            } catch (err) {
+              console.warn('Error fetching quick balanced position:', err);
+            }
+
+            // 3. Start high-accuracy watch in the background to refine coordinates
             subscription = await Location.watchPositionAsync(
               {
                 accuracy: Location.Accuracy.High,
@@ -347,7 +436,6 @@ export default function IndexScreen() {
                 distanceInterval: 2,   // Or when moving more than 2 meters
               },
               (location) => {
-                // console.log(location)
                 if (isMounted && location.coords) {
                   const lat = parseFloat(location.coords.latitude);
                   const lng = parseFloat(location.coords.longitude);
@@ -367,12 +455,47 @@ export default function IndexScreen() {
       }
     };
 
+    // Periodic check (every 4 seconds) to detect if location services/permission are disabled live on screen
+    const intervalId = setInterval(async () => {
+      try {
+        const providerStatus = await Location.getProviderStatusAsync();
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (!providerStatus.locationServicesEnabled || status !== 'granted') {
+          setCurrentCoords(null);
+        }
+      } catch (err) {
+        setCurrentCoords(null);
+      }
+    }, 4000);
+
+    // App state listener to catch toggles immediately when returning to the app from settings
+    const handleAppStateChange = async (nextAppState) => {
+      if (nextAppState === 'active') {
+        try {
+          const providerStatus = await Location.getProviderStatusAsync();
+          const { status } = await Location.getForegroundPermissionsAsync();
+          if (!providerStatus.locationServicesEnabled || status !== 'granted') {
+            setCurrentCoords(null);
+          } else {
+            // Re-trigger acquisition if they re-enabled it
+            checkAndRequestLocation();
+          }
+        } catch (err) {
+          setCurrentCoords(null);
+        }
+      }
+    };
+
+    const appStateSubscription = AppState.addEventListener('change', handleAppStateChange);
+
     if (accessToken) {
       checkAndRequestLocation();
     }
 
     return () => {
       isMounted = false;
+      clearInterval(intervalId);
+      appStateSubscription.remove();
       if (subscription) {
         subscription.remove();
       }
@@ -409,10 +532,42 @@ export default function IndexScreen() {
           return;
         }
 
-        const location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
-          timeout: 8000
-        });
+        let location = null;
+        try {
+          // 1. Try last known first (instant)
+          const lastKnown = await Location.getLastKnownPositionAsync({});
+          if (lastKnown && lastKnown.coords) {
+            location = lastKnown;
+          }
+        } catch (err) {
+          console.warn('Error getting last known in fallback:', err);
+        }
+
+        if (!location) {
+          try {
+            // 2. Try balanced accuracy next (fast 3s timeout)
+            location = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Balanced,
+              timeout: 3000
+            });
+          } catch (err) {
+            // 3. Final fallback to high accuracy with short timeout
+            try {
+              location = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.High,
+                timeout: 4000
+              });
+            } catch (fallbackErr) {
+              Alert.alert(
+                'Location Error',
+                'Unable to retrieve your current location. Please check your GPS signal and settings.'
+              );
+              setIsClockActionLoading(false);
+              return;
+            }
+          }
+        }
+
         lat = parseFloat(location.coords.latitude);
         lng = parseFloat(location.coords.longitude);
         setCurrentCoords({ latitude: lat, longitude: lng });
@@ -472,9 +627,142 @@ export default function IndexScreen() {
 
       // Pull latest user profile to keep data consistent
       dispatch(fetchUserProfile());
+      fetchAttendanceHistory();
 
     } catch (err) {
       Alert.alert('Attendance Failed', err.message);
+    } finally {
+      setIsClockActionLoading(false);
+    }
+  };
+
+  const handleQrClockIn = async (scannedToken) => {
+    if (isClockActionLoading) return;
+    try {
+      setIsClockActionLoading(true);
+
+      let lat = null;
+      let lng = null;
+
+      if (currentCoords) {
+        lat = currentCoords.latitude;
+        lng = currentCoords.longitude;
+      } else {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert(
+            'Location Permission Denied',
+            'You must grant location permissions to perform QR clock-in/out.'
+          );
+          setIsClockActionLoading(false);
+          return;
+        }
+
+        let location = null;
+        try {
+          const lastKnown = await Location.getLastKnownPositionAsync({});
+          if (lastKnown && lastKnown.coords) {
+            location = lastKnown;
+          }
+        } catch (err) {
+          console.warn('Error getting last known in fallback:', err);
+        }
+
+        if (!location) {
+          try {
+            location = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Balanced,
+              timeout: 3000
+            });
+          } catch (err) {
+            try {
+              location = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.High,
+                timeout: 4000
+              });
+            } catch (fallbackErr) {
+              Alert.alert(
+                'Location Error',
+                'Unable to retrieve your current location. Please check your GPS signal and settings.'
+              );
+              setIsClockActionLoading(false);
+              return;
+            }
+          }
+        }
+
+        lat = parseFloat(location.coords.latitude);
+        lng = parseFloat(location.coords.longitude);
+        setCurrentCoords({ latitude: lat, longitude: lng });
+      }
+
+      let tokenValue = scannedToken;
+      // If it is a URL, extract the token from the end of the path
+      if (tokenValue.includes('/api/employee/qr-clock/')) {
+        const parts = tokenValue.split('/api/employee/qr-clock/');
+        if (parts.length > 1) {
+          tokenValue = parts[1].replace(/\//g, ''); // Remove trailing/nested slashes
+        }
+      }
+
+      const targetUrl = `${API_BASE_URL}/api/employee/qr-clock/${tokenValue}/`;
+
+      console.log('Sending QR Clock to:', targetUrl, 'coords:', lat, lng);
+
+      const response = await fetch(targetUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+          'ngrok-skip-browser-warning': 'true',
+          'Bypass-Tunnel-Reminder': 'true',
+        },
+        body: JSON.stringify({
+          latitude: lat,
+          longitude: lng
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to submit QR attendance.');
+      }
+
+      if (data.action === 'clock_in') {
+        setIsCheckedIn(true);
+        setCheckInTime(data.time);
+
+        const newActivity = {
+          id: Math.random().toString(),
+          type: 'Clock In (QR)',
+          time: `Today, ${data.time}`,
+          status: data.status_label || 'On Time',
+          border: '#10B981'
+        };
+        setActivities(prev => [newActivity, ...prev]);
+        Alert.alert('Checked In (QR)', data.message || 'Clocked in successfully.');
+      } else {
+        setIsCheckedIn(false);
+        setCheckInTime(null);
+
+        const newActivity = {
+          id: Math.random().toString(),
+          type: 'Clock Out (QR)',
+          time: `Today, ${data.time}`,
+          status: 'On Time',
+          border: '#8E9AA6'
+        };
+        setActivities(prev => [newActivity, ...prev]);
+        Alert.alert('Checked Out (QR)', data.message || 'Clocked out successfully.');
+      }
+
+      dispatch(fetchUserProfile());
+      fetchAttendanceHistory();
+
+    } catch (err) {
+      console.error('QR Clock Error:', err);
+      Alert.alert('Attendance Error', err.message || 'An error occurred during QR verification.');
     } finally {
       setIsClockActionLoading(false);
     }
@@ -558,10 +846,14 @@ export default function IndexScreen() {
 
             <Animated.View style={animatedButtonStyle}>
               <TouchableOpacity
-                style={[styles.clockButton, isCheckedIn ? styles.clockButtonOut : styles.clockButtonIn, isClockActionLoading && { opacity: 0.6 }]}
+                style={[
+                  styles.clockButton,
+                  isCheckedIn ? styles.clockButtonOut : styles.clockButtonIn,
+                  (!currentCoords || isClockActionLoading) && { opacity: 0.5 }
+                ]}
                 onPress={handleCheckInToggle}
                 activeOpacity={0.9}
-                disabled={isClockActionLoading}
+                disabled={isClockActionLoading || !currentCoords}
               >
                 <View style={styles.clockButtonContent}>
                   {isCheckedIn ? (
@@ -586,7 +878,12 @@ export default function IndexScreen() {
             <Text style={styles.sectionHeader}>Quick Actions</Text>
             <View style={styles.actionsRow}>
               {/* Action 1 */}
-              <TouchableOpacity style={styles.actionCard} activeOpacity={0.8} onPress={() => setActiveTab('Scan')}>
+              <TouchableOpacity
+                style={[styles.actionCard, !currentCoords && { opacity: 0.5 }]}
+                activeOpacity={0.8}
+                onPress={() => setActiveTab('Scan')}
+                disabled={!currentCoords}
+              >
                 <View style={styles.actionIconWrapper}>
                   <QrIcon color="#6236FF" />
                 </View>
@@ -594,7 +891,11 @@ export default function IndexScreen() {
               </TouchableOpacity>
 
               {/* Action 2 */}
-              <TouchableOpacity style={styles.actionCard} activeOpacity={0.8}>
+              <TouchableOpacity
+                style={[styles.actionCard, !currentCoords && { opacity: 0.5 }]}
+                activeOpacity={0.8}
+                disabled={!currentCoords}
+              >
                 <View style={styles.actionIconWrapper}>
                   <PenIcon color="#6236FF" />
                 </View>
@@ -602,7 +903,11 @@ export default function IndexScreen() {
               </TouchableOpacity>
 
               {/* Action 3 */}
-              <TouchableOpacity style={styles.actionCard} activeOpacity={0.8}>
+              <TouchableOpacity
+                style={[styles.actionCard, !currentCoords && { opacity: 0.5 }]}
+                activeOpacity={0.8}
+                disabled={!currentCoords}
+              >
                 <View style={styles.actionIconWrapper}>
                   <KeypadIcon color="#6236FF" />
                 </View>
@@ -695,7 +1000,7 @@ export default function IndexScreen() {
         <QRScanner
           onBack={() => setActiveTab('Home')}
           onScanSuccess={(scannedToken) => {
-            handleCheckInToggle();
+            handleQrClockIn(scannedToken);
             setActiveTab('Home');
           }}
         />
@@ -721,9 +1026,10 @@ export default function IndexScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.tabItem, activeTab === 'Scan' && styles.activeTabBg]}
+            style={[styles.tabItem, activeTab === 'Scan' && styles.activeTabBg, !currentCoords && { opacity: 0.4 }]}
             onPress={() => setActiveTab('Scan')}
             activeOpacity={0.8}
+            disabled={!currentCoords}
           >
             <ScanTabIcon color={activeTab === 'Scan' ? '#6236FF' : '#8A94A6'} />
             {activeTab === 'Scan' && <Text style={styles.activeTabText}>Scan</Text>}
