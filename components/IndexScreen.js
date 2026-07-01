@@ -34,6 +34,7 @@ import HistoryScreen from './HistoryScreen';
 import ProfileScreen from './ProfileScreen';
 import QRScanner from './QRScanner';
 import NotificationScreen from './NotificationScreen';
+import TaskScreen from './TaskScreen';
 
 const { width } = Dimensions.get('window');
 
@@ -106,9 +107,10 @@ const HomeTabIcon = ({ color }) => (
   </Svg>
 );
 
-const ScanTabIcon = ({ color }) => (
+const TaskTabIcon = ({ color }) => (
   <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2}>
-    <Path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" strokeLinecap="round" strokeLinejoin="round" />
+    <Rect x={3} y={4} width={18} height={18} rx={2} ry={2} />
+    <Path d="M9 9h6M9 13h6M9 17h4" strokeLinecap="round" strokeLinejoin="round" />
   </Svg>
 );
 
@@ -776,9 +778,37 @@ export default function IndexScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {(activeTab === 'Home' || activeTab === 'Task') && (
+        <View style={[styles.header, { paddingHorizontal: 24, paddingTop: 16, marginBottom: 12 }]}>
+          <View style={styles.headerLeft}>
+            <Image
+              source={require('../assets/avatar.png')}
+              style={styles.avatar}
+              resizeMode="cover"
+            />
+            <View style={styles.headerTextWrapper}>
+              <Text style={styles.greetingText}>Good morning,</Text>
+              <Text style={styles.userNameText}>{fullName}</Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.notificationBtn}
+            activeOpacity={0.7}
+            onPress={() => setActiveTab('Notifications')}
+          >
+            <BellIcon color="#6236FF" />
+            {unreadCount > 0 ? (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>{unreadCount}</Text>
+              </View>
+            ) : null}
+          </TouchableOpacity>
+        </View>
+      )}
+
       {activeTab === 'Home' ? (
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, { paddingTop: 0 }]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -789,33 +819,6 @@ export default function IndexScreen() {
             />
           }
         >
-
-          {/* Dynamic Header */}
-          <View style={styles.header}>
-            <View style={styles.headerLeft}>
-              <Image
-                source={require('../assets/avatar.png')}
-                style={styles.avatar}
-                resizeMode="cover"
-              />
-              <View style={styles.headerTextWrapper}>
-                <Text style={styles.greetingText}>Good morning,</Text>
-                <Text style={styles.userNameText}>{fullName}</Text>
-              </View>
-            </View>
-            <TouchableOpacity
-              style={styles.notificationBtn}
-              activeOpacity={0.7}
-              onPress={() => setActiveTab('Notifications')}
-            >
-              <BellIcon color="#6236FF" />
-              {unreadCount > 0 ? (
-                <View style={styles.notificationBadge}>
-                  <Text style={styles.notificationBadgeText}>{unreadCount}</Text>
-                </View>
-              ) : null}
-            </TouchableOpacity>
-          </View>
 
           {/* Current Status Card */}
           <View style={styles.statusCard}>
@@ -996,6 +999,8 @@ export default function IndexScreen() {
         <HistoryScreen activities={activities} />
       ) : activeTab === 'Profile' ? (
         <ProfileScreen />
+      ) : activeTab === 'Task' ? (
+        <TaskScreen />
       ) : activeTab === 'Scan' ? (
         <QRScanner
           onBack={() => setActiveTab('Home')}
@@ -1026,13 +1031,13 @@ export default function IndexScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.tabItem, activeTab === 'Scan' && styles.activeTabBg, !currentCoords && { opacity: 0.4 }]}
-            onPress={() => setActiveTab('Scan')}
+            style={[styles.tabItem, activeTab === 'Task' && styles.activeTabBg, !currentCoords && { opacity: 0.4 }]}
+            onPress={() => setActiveTab('Task')}
             activeOpacity={0.8}
             disabled={!currentCoords}
           >
-            <ScanTabIcon color={activeTab === 'Scan' ? '#6236FF' : '#8A94A6'} />
-            {activeTab === 'Scan' && <Text style={styles.activeTabText}>Scan</Text>}
+            <TaskTabIcon color={activeTab === 'Task' ? '#6236FF' : '#8A94A6'} />
+            {activeTab === 'Task' && <Text style={styles.activeTabText}>Task</Text>}
           </TouchableOpacity>
 
           <TouchableOpacity

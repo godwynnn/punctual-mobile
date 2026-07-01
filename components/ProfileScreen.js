@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -6,14 +6,17 @@ import {
   Image,
   TouchableOpacity,
   ScrollView,
-  Alert
+  Alert,
+  Modal,
+  TextInput,
+  ActivityIndicator
 } from 'react-native';
 import Svg, { Path, Circle } from 'react-native-svg';
 import Animated, {
   FadeInUp
 } from 'react-native-reanimated';
 import { useDispatch, useSelector } from 'react-redux';
-import { logoutUser } from '../store/authSlice';
+import { logoutUser, API_BASE_URL, updateUser } from '../store/authSlice';
 
 // Custom SVG Icons for Settings
 const UserIcon = ({ color = '#6236FF' }) => (
@@ -69,7 +72,54 @@ const BadgeIcon = ({ color = '#10B981' }) => (
 
 export default function ProfileScreen() {
   const dispatch = useDispatch();
-  const { user } = useSelector((state) => state.auth);
+  const { user, accessToken } = useSelector((state) => state.auth);
+
+  const [modalVisible, setModalVisible] = useState(false);
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [phoneNo, setPhoneNo] = useState('');
+  const [whatsappNo, setWhatsappNo] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  const openEditModal = () => {
+    setFirstName(user?.first_name || '');
+    setLastName(user?.last_name || '');
+    setPhoneNo(user?.phone_no || '');
+    setWhatsappNo(user?.employee?.whatsapp_no || '');
+    setModalVisible(true);
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/employee/profile/update/`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          first_name: firstName,
+          last_name: lastName,
+          phone_no: phoneNo,
+          whatsapp_no: whatsappNo,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to update profile');
+      }
+
+      dispatch(updateUser(data.user));
+      setModalVisible(false);
+      Alert.alert('Success', 'Profile updated successfully!');
+    } catch (error) {
+      Alert.alert('Error', error.message || 'An error occurred while saving.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleLogout = () => {
     Alert.alert(
@@ -104,11 +154,11 @@ export default function ProfileScreen() {
               style={styles.avatarImage}
               resizeMode="cover"
             />
-            <View style={styles.editBadge}>
+            <TouchableOpacity style={styles.editBadge} activeOpacity={0.8} onPress={openEditModal}>
               <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth={3}>
                 <Path d="M12 5v14M5 12h14" strokeLinecap="round" />
               </Svg>
-            </View>
+            </TouchableOpacity>
           </View>
 
           <Text style={styles.userName}>{fullName}</Text>
@@ -153,7 +203,11 @@ export default function ProfileScreen() {
             </View>
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Phone</Text>
-              <Text style={styles.infoValue}>+1 (555) 019-2834</Text>
+              <Text style={styles.infoValue}>{user?.phone_no || 'Not set'}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>WhatsApp</Text>
+              <Text style={styles.infoValue}>{user?.employee?.whatsapp_no || 'Not set'}</Text>
             </View>
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Work Office</Text>
@@ -166,7 +220,7 @@ export default function ProfileScreen() {
                   `${user.employee.shift.name} (${user.employee.shift.start_time.slice(0, 5)} - ${user.employee.shift.end_time.slice(0, 5)})`
                 ) : user?.employee?.organization ? (
                   user.employee.organization.start_time ? (
-                    `Office Start: ${user.employee.organization.start_time.slice(0, 5)} (Duration: ${user.employee.organization.duration || 'Open'} hrs)`
+                    `Office Start: ${user.employee.organization.start_time.slice(0, 5)} (⏱️: ${user.employee.organization.duration || 'Open'} hrs)`
                   ) : '24/7 Hours'
                 ) : 'Not assigned'}
               </Text>
@@ -180,7 +234,7 @@ export default function ProfileScreen() {
 
           <View style={styles.settingsGroup}>
             {/* Setting 1 */}
-            <TouchableOpacity style={styles.settingItem} activeOpacity={0.7}>
+            <TouchableOpacity style={styles.settingItem} activeOpacity={0.7} onPress={openEditModal}>
               <View style={styles.settingLeft}>
                 <View style={styles.settingIconBg}>
                   <UserIcon color="#6236FF" />
@@ -236,6 +290,88 @@ export default function ProfileScreen() {
         </TouchableOpacity>
 
       </ScrollView>
+
+      {/* Edit Personal Details Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Edit Personal Details</Text>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>First Name</Text>
+              <TextInput
+                style={[styles.textInput, styles.readOnlyInput]}
+                value={firstName}
+                editable={false}
+                placeholder="First Name"
+                placeholderTextColor="#A0AEC0"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Last Name</Text>
+              <TextInput
+                style={[styles.textInput, styles.readOnlyInput]}
+                value={lastName}
+                editable={false}
+                placeholder="Last Name"
+                placeholderTextColor="#A0AEC0"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Phone Number</Text>
+              <TextInput
+                style={styles.textInput}
+                value={phoneNo}
+                onChangeText={setPhoneNo}
+                placeholder="Phone Number"
+                placeholderTextColor="#A0AEC0"
+                keyboardType="phone-pad"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>WhatsApp Number</Text>
+              <TextInput
+                style={styles.textInput}
+                value={whatsappNo}
+                onChangeText={setWhatsappNo}
+                placeholder="WhatsApp Number"
+                placeholderTextColor="#A0AEC0"
+                keyboardType="phone-pad"
+              />
+            </View>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setModalVisible(false)}
+                disabled={isSaving}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalButton, styles.saveButton]}
+                onPress={handleSave}
+                disabled={isSaving}
+              >
+                {isSaving ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.saveButtonText}>Save</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -450,5 +586,85 @@ const styles = StyleSheet.create({
   },
   noBorder: {
     borderBottomWidth: 0,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(30, 27, 75, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 28,
+    width: '100%',
+    padding: 24,
+    shadowColor: '#6236FF',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 24,
+    elevation: 10,
+  },
+  modalTitle: {
+    fontFamily: 'Urbanist_700Bold',
+    fontSize: 20,
+    color: '#1E1B4B',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  inputGroup: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontFamily: 'Urbanist_600SemiBold',
+    fontSize: 12,
+    color: '#8A94A6',
+    marginBottom: 6,
+  },
+  textInput: {
+    backgroundColor: '#F8F7FF',
+    borderWidth: 1,
+    borderColor: '#EBE9FE',
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    fontFamily: 'Urbanist_500Medium',
+    fontSize: 14,
+    color: '#1E1B4B',
+  },
+  readOnlyInput: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
+    color: '#64748B',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 12,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#F5F5FA',
+    marginRight: 8,
+  },
+  cancelButtonText: {
+    fontFamily: 'Urbanist_700Bold',
+    fontSize: 14,
+    color: '#8A94A6',
+  },
+  saveButton: {
+    backgroundColor: '#6236FF',
+    marginLeft: 8,
+  },
+  saveButtonText: {
+    fontFamily: 'Urbanist_700Bold',
+    fontSize: 14,
+    color: '#FFFFFF',
   },
 });
