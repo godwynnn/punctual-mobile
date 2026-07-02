@@ -213,7 +213,7 @@ export default function IndexScreen() {
       if (response.ok && Array.isArray(data)) {
         const formatted = data.map(item => {
           const dateStr = item.date;
-          
+
           let checkInTimeStr = '';
           if (item.check_in) {
             const checkInLocal = new Date(item.check_in);
@@ -247,7 +247,7 @@ export default function IndexScreen() {
           }
           return events;
         }).flat();
-        
+
         setActivities(formatted);
       }
     } catch (err) {
@@ -777,8 +777,8 @@ export default function IndexScreen() {
   });
 
   return (
-    <SafeAreaView style={styles.container}>
-      {(activeTab === 'Home' || activeTab === 'Task') && (
+    <SafeAreaView style={[styles.container, activeTab !== 'Home' && { backgroundColor: '#FAF9FF' }]}>
+      {(activeTab === 'Home') && (
         <View style={[styles.header, { paddingHorizontal: 24, paddingTop: 16, marginBottom: 12 }]}>
           <View style={styles.headerLeft}>
             <Image
@@ -876,121 +876,123 @@ export default function IndexScreen() {
             </Animated.View>
           </View>
 
-          {/* Quick Actions */}
-          <View style={styles.sectionContainer}>
-            <Text style={styles.sectionHeader}>Quick Actions</Text>
-            <View style={styles.actionsRow}>
-              {/* Action 1 */}
-              <TouchableOpacity
-                style={[styles.actionCard, !currentCoords && { opacity: 0.5 }]}
-                activeOpacity={0.8}
-                onPress={() => setActiveTab('Scan')}
-                disabled={!currentCoords}
-              >
-                <View style={styles.actionIconWrapper}>
-                  <QrIcon color="#6236FF" />
-                </View>
-                <Text style={styles.actionLabel}>Scan QR</Text>
-              </TouchableOpacity>
-
-              {/* Action 2 */}
-              <TouchableOpacity
-                style={[styles.actionCard, !currentCoords && { opacity: 0.5 }]}
-                activeOpacity={0.8}
-                disabled={!currentCoords}
-              >
-                <View style={styles.actionIconWrapper}>
-                  <PenIcon color="#6236FF" />
-                </View>
-                <Text style={styles.actionLabel}>Manual</Text>
-              </TouchableOpacity>
-
-              {/* Action 3 */}
-              <TouchableOpacity
-                style={[styles.actionCard, !currentCoords && { opacity: 0.5 }]}
-                activeOpacity={0.8}
-                disabled={!currentCoords}
-              >
-                <View style={styles.actionIconWrapper}>
-                  <KeypadIcon color="#6236FF" />
-                </View>
-                <Text style={styles.actionLabel}>Pin Code</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Recent Activity */}
-          <View style={styles.sectionContainer}>
-            <View style={styles.activityHeaderRow}>
-              <Text style={styles.sectionHeader}>Recent Activity</Text>
-              <TouchableOpacity activeOpacity={0.7} onPress={() => setActiveTab('History')}>
-                <Text style={styles.viewAllText}>View All</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Activity List */}
-            <View style={styles.activityList}>
-              {activities.slice(0, 3).map((item) => (
-                <Animated.View
-                  key={item.id}
-                  entering={FadeInUp.springify().damping(12)}
-                  layout={Layout.springify().damping(12)}
-                  style={[styles.activityRow, { borderLeftColor: item.border }]}
+          <View style={styles.sectionsContainer}>
+            {/* Quick Actions */}
+            <View style={styles.sectionContainer}>
+              <Text style={styles.sectionHeader}>Quick Actions</Text>
+              <View style={styles.actionsRow}>
+                {/* Action 1 */}
+                <TouchableOpacity
+                  style={[styles.actionCard, !currentCoords && { opacity: 0.5 }]}
+                  activeOpacity={0.8}
+                  onPress={() => setActiveTab('Scan')}
+                  disabled={!currentCoords}
                 >
-                  <View style={styles.activityLeft}>
-                    <View style={styles.activityIconBg}>
-                      {item.type === 'Clock In' ? (
-                        <ClockInIcon color="#6236FF" />
-                      ) : (
-                        <ClockOutIcon color="#8E9AA6" />
-                      )}
-                    </View>
-                    <View style={styles.activityTextWrapper}>
-                      <Text style={styles.activityTypeText}>{item.type}</Text>
-                      <Text style={styles.activityTimeText}>{item.time}</Text>
-                    </View>
+                  <View style={styles.actionIconWrapper}>
+                    <QrIcon color="#6236FF" />
                   </View>
-                  <View style={[
-                    styles.activityStatusBadge,
-                    item.status === 'On Time' ? styles.statusBadgeGreen : styles.statusBadgeRed
-                  ]}>
-                    <Text style={[
-                      styles.activityStatusText,
-                      item.status === 'On Time' ? styles.statusTextGreen : styles.statusTextRed
+                  <Text style={styles.actionLabel}>Scan QR</Text>
+                </TouchableOpacity>
+
+                {/* Action 2 */}
+                <TouchableOpacity
+                  style={[styles.actionCard, !currentCoords && { opacity: 0.5 }]}
+                  activeOpacity={0.8}
+                  disabled={!currentCoords}
+                >
+                  <View style={styles.actionIconWrapper}>
+                    <PenIcon color="#6236FF" />
+                  </View>
+                  <Text style={styles.actionLabel}>Manual</Text>
+                </TouchableOpacity>
+
+                {/* Action 3 */}
+                <TouchableOpacity
+                  style={[styles.actionCard, !currentCoords && { opacity: 0.5 }]}
+                  activeOpacity={0.8}
+                  disabled={!currentCoords}
+                >
+                  <View style={styles.actionIconWrapper}>
+                    <KeypadIcon color="#6236FF" />
+                  </View>
+                  <Text style={styles.actionLabel}>Pin Code</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Recent Activity */}
+            <View style={styles.sectionContainer}>
+              <View style={styles.activityHeaderRow}>
+                <Text style={styles.sectionHeader}>Recent Activity</Text>
+                <TouchableOpacity activeOpacity={0.7} onPress={() => setActiveTab('History')}>
+                  <Text style={styles.viewAllText}>View All</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Activity List */}
+              <View style={styles.activityList}>
+                {activities.slice(0, 3).map((item) => (
+                  <Animated.View
+                    key={item.id}
+                    entering={FadeInUp.springify().damping(12)}
+                    layout={Layout.springify().damping(12)}
+                    style={[styles.activityRow, { borderLeftColor: item.border }]}
+                  >
+                    <View style={styles.activityLeft}>
+                      <View style={styles.activityIconBg}>
+                        {item.type === 'Clock In' ? (
+                          <ClockInIcon color="#6236FF" />
+                        ) : (
+                          <ClockOutIcon color="#8E9AA6" />
+                        )}
+                      </View>
+                      <View style={styles.activityTextWrapper}>
+                        <Text style={styles.activityTypeText}>{item.type}</Text>
+                        <Text style={styles.activityTimeText}>{item.time}</Text>
+                      </View>
+                    </View>
+                    <View style={[
+                      styles.activityStatusBadge,
+                      item.status === 'On Time' ? styles.statusBadgeGreen : styles.statusBadgeRed
                     ]}>
-                      {item.status}
-                    </Text>
+                      <Text style={[
+                        styles.activityStatusText,
+                        item.status === 'On Time' ? styles.statusTextGreen : styles.statusTextRed
+                      ]}>
+                        {item.status}
+                      </Text>
+                    </View>
+                  </Animated.View>
+                ))}
+              </View>
+            </View>
+
+            {/* Lower Dashboard Stats */}
+            <View style={styles.statsRow}>
+              {/* Attendance Stats Card */}
+              <View style={[styles.statsCard, styles.bgDark]}>
+                <View style={styles.statsHeaderRow}>
+                  <View>
+                    <Text style={styles.statsLabelDark}>Attendance</Text>
+                    <Text style={styles.statsValueDark}>98%</Text>
                   </View>
-                </Animated.View>
-              ))}
-            </View>
-          </View>
-
-          {/* Lower Dashboard Stats */}
-          <View style={styles.statsRow}>
-            {/* Attendance Stats Card */}
-            <View style={[styles.statsCard, styles.bgDark]}>
-              <View style={styles.statsHeaderRow}>
-                <View>
-                  <Text style={styles.statsLabelDark}>Attendance</Text>
-                  <Text style={styles.statsValueDark}>98%</Text>
+                  <View style={styles.calendarIconWatermark}>
+                    <CalendarCheckIcon color="rgba(255, 255, 255, 0.12)" />
+                  </View>
                 </View>
-                <View style={styles.calendarIconWatermark}>
-                  <CalendarCheckIcon color="rgba(255, 255, 255, 0.12)" />
+                <View style={styles.progressBarBg}>
+                  <View style={[styles.progressBarFill, { width: '98%' }]} />
                 </View>
               </View>
-              <View style={styles.progressBarBg}>
-                <View style={[styles.progressBarFill, { width: '98%' }]} />
-              </View>
-            </View>
 
-            {/* Hours Worked Stats Card */}
-            <View style={[styles.statsCard, styles.bgLavender]}>
-              <Text style={styles.statsLabelPurple}>Hours Worked</Text>
-              <Text style={styles.statsValuePurple}>162.5</Text>
-              <View style={styles.trendRow}>
-                <TrendUpIcon color="#10B981" />
-                <Text style={styles.trendText}>+12% this month</Text>
+              {/* Hours Worked Stats Card */}
+              <View style={[styles.statsCard, styles.bgLavender]}>
+                <Text style={styles.statsLabelPurple}>Hours Worked</Text>
+                <Text style={styles.statsValuePurple}>162.5</Text>
+                <View style={styles.trendRow}>
+                  <TrendUpIcon color="#10B981" />
+                  <Text style={styles.trendText}>+12% this month</Text>
+                </View>
               </View>
             </View>
           </View>
@@ -1066,12 +1068,21 @@ export default function IndexScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAF9FF',
+    backgroundColor: '#6236FF',
   },
   scrollContent: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 0,
     paddingTop: 16,
-    paddingBottom: 96, // extra space to avoid overlapping sticky navbar
+    paddingBottom: 0,
+  },
+  sectionsContainer: {
+    backgroundColor: '#FAF9FF',
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    paddingHorizontal: 24,
+    paddingTop: 32,
+    paddingBottom: 110,
+    minHeight: 400,
   },
   header: {
     flexDirection: 'row',
@@ -1095,12 +1106,12 @@ const styles = StyleSheet.create({
   greetingText: {
     fontFamily: 'Urbanist_500Medium',
     fontSize: 12,
-    color: '#8A94A6',
+    color: 'rgba(255, 255, 255, 0.7)',
   },
   userNameText: {
     fontFamily: 'Urbanist_700Bold',
     fontSize: 18,
-    color: '#1E1B4B',
+    color: '#FFFFFF',
     marginTop: 2,
   },
   notificationBtn: {
@@ -1135,16 +1146,17 @@ const styles = StyleSheet.create({
     fontFamily: 'Urbanist_800ExtraBold',
   },
   statusCard: {
-    backgroundColor: '#6236FF',
+    backgroundColor: '#522BE4',
     borderRadius: 28,
     paddingVertical: 24,
     paddingHorizontal: 20,
     alignItems: 'center',
-    shadowColor: '#6236FF',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.15,
-    shadowRadius: 18,
-    elevation: 8,
+    marginHorizontal: 24,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 6,
     marginBottom: 28,
   },
   statusBadge: {

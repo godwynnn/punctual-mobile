@@ -2,11 +2,11 @@ import React, { useState, useRef } from 'react';
 import { StyleSheet, Text, View, Image, TouchableOpacity, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
-import Animated, { 
-  useSharedValue, 
-  useAnimatedStyle, 
-  useAnimatedScrollHandler, 
-  interpolate, 
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  useAnimatedScrollHandler,
+  interpolate,
   interpolateColor,
   useAnimatedRef
 } from 'react-native-reanimated';
@@ -68,7 +68,7 @@ export default function Onboarding({ onComplete }) {
         [8, 24, 8],
         'clamp'
       );
-      
+
       const dotColor = interpolateColor(
         scrollX.value,
         [(index - 1) * width, index * width, (index + 1) * width],
@@ -134,7 +134,7 @@ export default function Onboarding({ onComplete }) {
               resizeMode="contain"
             />
           </View>
-          
+
           <View style={styles.textWrapper}>
             <Text style={styles.titleText}>Track Your Work Hours Effortlessly</Text>
             <Text style={styles.descriptionText}>
