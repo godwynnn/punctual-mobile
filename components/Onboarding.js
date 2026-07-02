@@ -128,36 +128,11 @@ export default function Onboarding({ onComplete }) {
         {/* Slide 1 */}
         <View style={styles.slide}>
           <View style={styles.illustrationWrapper}>
-            <View style={styles.diagramContainer}>
-              <View style={styles.mainPurpleCard}>
-                <View style={styles.listItem}>
-                  <View style={styles.listDot} />
-                  <View style={styles.listLineLong} />
-                </View>
-                <View style={styles.listItem}>
-                  <View style={styles.listDot} />
-                  <View style={styles.listLineShort} />
-                </View>
-                <View style={styles.listItem}>
-                  <View style={styles.listDot} />
-                  <View style={styles.listLineLong} />
-                </View>
-              </View>
-              
-              <View style={[styles.badge, styles.clockBadge]}>
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#5F4ECB" strokeWidth={2.5}>
-                  <Circle cx={12} cy={12} r={9} />
-                  <Path d="M12 7v5l3 2" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
-              </View>
-
-              <View style={[styles.badge, styles.profileBadge]}>
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#5F4ECB" strokeWidth={2.5}>
-                  <Path d="M18 21v-2a3 3 0 0 0-3-3H9a3 3 0 0 0-3 3v2" strokeLinecap="round" />
-                  <Circle cx={12} cy={7} r={4} />
-                </Svg>
-              </View>
-            </View>
+            <Image
+              source={require('../assets/onboarding1.jpg')}
+              style={styles.onboardingImage}
+              resizeMode="contain"
+            />
           </View>
           
           <View style={styles.textWrapper}>
@@ -171,22 +146,17 @@ export default function Onboarding({ onComplete }) {
         {/* Slide 2 */}
         <View style={styles.slide}>
           <View style={styles.illustrationWrapper}>
-            <View style={styles.imageCardContainer}>
-              <View style={styles.shadowBackdrop} />
-              <View style={styles.imageCardDark}>
-                <Image 
-                  source={require('../assets/warren.png')} 
-                  style={styles.mockupImage} 
-                  resizeMode="cover"
-                />
-              </View>
-            </View>
+            <Image
+              source={require('../assets/onboarding2.jpg')}
+              style={styles.onboardingImage}
+              resizeMode="contain"
+            />
           </View>
 
           <View style={styles.textWrapper}>
-            <Text style={styles.titleText}>Elevate Your Routine With Quick Insights</Text>
+            <Text style={styles.titleText}>Manage Tasks Efficiently</Text>
             <Text style={styles.descriptionText}>
-              Get bite-sized summaries, unlock key insights, and learn smarter in minutes with our curated knowledge library.
+              Organize, track, and complete your assigned tasks effectively with real-time updates and seamless status syncs.
             </Text>
           </View>
         </View>
@@ -194,33 +164,17 @@ export default function Onboarding({ onComplete }) {
         {/* Slide 3 */}
         <View style={styles.slide}>
           <View style={styles.illustrationWrapper}>
-            <View style={styles.avatarContainer}>
-              <View style={[styles.avatarBadge, styles.badgeTopRight]}>
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#5F4ECB" strokeWidth={2.5}>
-                  <Rect x={3} y={4} width={18} height={16} rx={2} />
-                  <Path d="M16 2v4M8 2v4M3 10h18" />
-                </Svg>
-              </View>
-              <View style={[styles.avatarBadge, styles.badgeBottomLeft]}>
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#5F4ECB" strokeWidth={2.5}>
-                  <Path d="M3 17l6-6 4 4 8-8" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
-              </View>
-              
-              <View style={styles.avatarFrame}>
-                <Image 
-                  source={require('../assets/avatar.png')} 
-                  style={styles.avatarImage} 
-                  resizeMode="cover"
-                />
-              </View>
-            </View>
+            <Image
+              source={require('../assets/onboarding3.png')}
+              style={styles.onboardingImage}
+              resizeMode="contain"
+            />
           </View>
 
           <View style={styles.textWrapper}>
-            <Text style={styles.titleText}>Achieve Your Attendance Goals</Text>
+            <Text style={styles.titleText}>Productive Around the Clock</Text>
             <Text style={styles.descriptionText}>
-              Stay on top of your shifts and performance metrics with real-time tracking and personalized attendance insights.
+              Maximize your efficiency at any time. Monitor shifts, complete checklists, and optimize your work schedule.
             </Text>
           </View>
         </View>
@@ -286,6 +240,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 12,
+  },
+  onboardingImage: {
+    width: width * 0.85,
+    height: '100%',
   },
   textWrapper: {
     flex: 3,

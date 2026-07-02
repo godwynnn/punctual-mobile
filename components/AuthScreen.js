@@ -110,7 +110,8 @@ export default function AuthScreen() {
   const [showPassword, setShowPassword] = useState(false);
 
   // Register Form States
-  const [regName, setRegName] = useState('');
+  const [regFirstName, setRegFirstName] = useState('');
+  const [regLastName, setRegLastName] = useState('');
   const [regId, setRegId] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
@@ -148,8 +149,12 @@ export default function AuthScreen() {
   };
 
   const handleRegister = () => {
-    if (!regName.trim()) {
-      Alert.alert("Validation Error", "Please enter your full name.");
+    if (!regFirstName.trim()) {
+      Alert.alert("Validation Error", "Please enter your first name.");
+      return;
+    }
+    if (!regLastName.trim()) {
+      Alert.alert("Validation Error", "Please enter your last name.");
       return;
     }
     if (!regEmail.trim() || !regEmail.includes('@')) {
@@ -162,7 +167,7 @@ export default function AuthScreen() {
     }
 
     dispatch(registerUser({
-      fullName: regName,
+      fullName: `${regFirstName.trim()} ${regLastName.trim()}`,
       email: regEmail.trim(),
       password: regPassword
     })).unwrap()
@@ -283,18 +288,33 @@ export default function AuthScreen() {
                 <Text style={styles.titleText}>Create Account</Text>
                 {/* <Text style={styles.subtitleText}>Step into the Luminous ecosystem today.</Text> */}
 
-                {/* Input 1: Name */}
-                <Text style={styles.fieldLabel}>Full Name</Text>
+                {/* Input 1: First Name */}
+                <Text style={styles.fieldLabel}>First Name</Text>
                 <View style={styles.inputWrapper}>
                   <View style={styles.inputIconContainer}>
                     <UserIcon color="#8A94A6" />
                   </View>
                   <TextInput
                     style={styles.textInput}
-                    placeholder="Johnathan Doe"
+                    placeholder="John"
                     placeholderTextColor="#A0AAB9"
-                    value={regName}
-                    onChangeText={setRegName}
+                    value={regFirstName}
+                    onChangeText={setRegFirstName}
+                  />
+                </View>
+
+                {/* Input 2: Last Name */}
+                <Text style={styles.fieldLabel}>Last Name</Text>
+                <View style={styles.inputWrapper}>
+                  <View style={styles.inputIconContainer}>
+                    <UserIcon color="#8A94A6" />
+                  </View>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="Doe"
+                    placeholderTextColor="#A0AAB9"
+                    value={regLastName}
+                    onChangeText={setRegLastName}
                   />
                 </View>
 
