@@ -17,6 +17,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useDispatch, useSelector } from 'react-redux';
 import { logoutUser, API_BASE_URL, updateUser } from '../store/authSlice';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Custom SVG Icons for Settings
 const UserIcon = ({ color = '#6236FF' }) => (
@@ -71,6 +72,7 @@ const BadgeIcon = ({ color = '#10B981' }) => (
 );
 
 export default function ProfileScreen() {
+  const insets = useSafeAreaInsets();
   const dispatch = useDispatch();
   const { user, accessToken } = useSelector((state) => state.auth);
 
@@ -144,7 +146,7 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: 96 + insets.bottom }]} showsVerticalScrollIndicator={false}>
 
         {/* Profile Card Header */}
         <Animated.View entering={FadeInUp.springify().damping(12)} style={styles.profileHeaderCard}>

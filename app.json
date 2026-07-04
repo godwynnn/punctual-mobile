@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "",
+    "name": "punctuahr",
     "slug": "punctua-hr",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -13,7 +13,11 @@
       "backgroundColor": "#2c1039"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.godwynn.mobile",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -28,6 +32,11 @@
     },
     "plugins": [
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "d682953a-5e81-4e4c-94a9-41995698e013"
+      }
+    }
   }
 }

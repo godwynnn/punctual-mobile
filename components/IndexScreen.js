@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { fetch as streamFetch } from 'expo/fetch';
 import {
   StyleSheet,
@@ -16,7 +16,7 @@ import {
   AppState
 } from 'react-native';
 import * as Location from 'expo-location';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDispatch, useSelector } from 'react-redux';
 import { API_BASE_URL, fetchUserProfile } from '../store/authSlice';
 import { addNotification, fetchNotifications } from '../store/notificationSlice';
@@ -129,6 +129,7 @@ const ProfileTabIcon = ({ color }) => (
 );
 
 export default function IndexScreen() {
+  const insets = useSafeAreaInsets();
   const dispatch = useDispatch();
   const { user, accessToken } = useSelector((state) => state.auth);
   const { unreadCount } = useSelector((state) => state.notifications);
@@ -137,7 +138,8 @@ export default function IndexScreen() {
   const [activeTab, setActiveTab] = useState('Home');
   const [refreshing, setRefreshing] = useState(false);
   const [isClockActionLoading, setIsClockActionLoading] = useState(false);
-  const [currentCoords, setCurrentCoords] = useState(null);
+  const [isGpsActive, setIsGpsActive] = useState(false);
+  const coordsRef = useRef(null);
 
   // Sync isCheckedIn state with backend user profile data on load/update
   useEffect(() => {
@@ -409,7 +411,8 @@ export default function IndexScreen() {
               if (lastKnown && lastKnown.coords && isMounted) {
                 const lat = parseFloat(lastKnown.coords.latitude);
                 const lng = parseFloat(lastKnown.coords.longitude);
-                setCurrentCoords({ latitude: lat, longitude: lng });
+                coordsRef.current = { latitude: lat, longitude: lng };
+                setIsGpsActive(true);
               }
             } catch (err) {
               console.warn('Error fetching last known position:', err);
@@ -424,7 +427,8 @@ export default function IndexScreen() {
               if (quickLoc && quickLoc.coords && isMounted) {
                 const lat = parseFloat(quickLoc.coords.latitude);
                 const lng = parseFloat(quickLoc.coords.longitude);
-                setCurrentCoords({ latitude: lat, longitude: lng });
+                coordsRef.current = { latitude: lat, longitude: lng };
+                setIsGpsActive(true);
               }
             } catch (err) {
               console.warn('Error fetching quick balanced position:', err);
@@ -441,7 +445,8 @@ export default function IndexScreen() {
                 if (isMounted && location.coords) {
                   const lat = parseFloat(location.coords.latitude);
                   const lng = parseFloat(location.coords.longitude);
-                  setCurrentCoords({ latitude: lat, longitude: lng });
+                  coordsRef.current = { latitude: lat, longitude: lng };
+                  setIsGpsActive(true);
                 }
               }
             );
@@ -463,10 +468,12 @@ export default function IndexScreen() {
         const providerStatus = await Location.getProviderStatusAsync();
         const { status } = await Location.getForegroundPermissionsAsync();
         if (!providerStatus.locationServicesEnabled || status !== 'granted') {
-          setCurrentCoords(null);
+          coordsRef.current = null;
+          setIsGpsActive(false);
         }
       } catch (err) {
-        setCurrentCoords(null);
+        coordsRef.current = null;
+        setIsGpsActive(false);
       }
     }, 4000);
 
@@ -477,13 +484,15 @@ export default function IndexScreen() {
           const providerStatus = await Location.getProviderStatusAsync();
           const { status } = await Location.getForegroundPermissionsAsync();
           if (!providerStatus.locationServicesEnabled || status !== 'granted') {
-            setCurrentCoords(null);
+            coordsRef.current = null;
+            setIsGpsActive(false);
           } else {
             // Re-trigger acquisition if they re-enabled it
             checkAndRequestLocation();
           }
         } catch (err) {
-          setCurrentCoords(null);
+          coordsRef.current = null;
+          setIsGpsActive(false);
         }
       }
     };
@@ -519,9 +528,9 @@ export default function IndexScreen() {
       let lat = null;
       let lng = null;
 
-      if (currentCoords) {
-        lat = currentCoords.latitude;
-        lng = currentCoords.longitude;
+      if (coordsRef.current) {
+        lat = coordsRef.current.latitude;
+        lng = coordsRef.current.longitude;
       } else {
         // Fallback if coordinates are not cached yet
         const { status } = await Location.requestForegroundPermissionsAsync();
@@ -572,7 +581,8 @@ export default function IndexScreen() {
 
         lat = parseFloat(location.coords.latitude);
         lng = parseFloat(location.coords.longitude);
-        setCurrentCoords({ latitude: lat, longitude: lng });
+        coordsRef.current = { latitude: lat, longitude: lng };
+        setIsGpsActive(true);
       }
 
       console.log(lat, lng)
@@ -646,9 +656,9 @@ export default function IndexScreen() {
       let lat = null;
       let lng = null;
 
-      if (currentCoords) {
-        lat = currentCoords.latitude;
-        lng = currentCoords.longitude;
+      if (coordsRef.current) {
+        lat = coordsRef.current.latitude;
+        lng = coordsRef.current.longitude;
       } else {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
@@ -695,7 +705,8 @@ export default function IndexScreen() {
 
         lat = parseFloat(location.coords.latitude);
         lng = parseFloat(location.coords.longitude);
-        setCurrentCoords({ latitude: lat, longitude: lng });
+        coordsRef.current = { latitude: lat, longitude: lng };
+        setIsGpsActive(true);
       }
 
       let tokenValue = scannedToken;
@@ -835,7 +846,7 @@ export default function IndexScreen() {
               }
             </Text>
 
-            {currentCoords ? (
+            {isGpsActive ? (
               <View style={styles.gpsStatusWrapper}>
                 <View style={styles.gpsDotActive} />
                 <Text style={styles.gpsStatusText}>GPS Active</Text>
@@ -852,11 +863,11 @@ export default function IndexScreen() {
                 style={[
                   styles.clockButton,
                   isCheckedIn ? styles.clockButtonOut : styles.clockButtonIn,
-                  (!currentCoords || isClockActionLoading) && { opacity: 0.5 }
+                  (!isGpsActive || isClockActionLoading) && { opacity: 0.5 }
                 ]}
                 onPress={handleCheckInToggle}
                 activeOpacity={0.9}
-                disabled={isClockActionLoading || !currentCoords}
+                disabled={isClockActionLoading || !isGpsActive}
               >
                 <View style={styles.clockButtonContent}>
                   {isCheckedIn ? (
@@ -876,17 +887,17 @@ export default function IndexScreen() {
             </Animated.View>
           </View>
 
-          <View style={styles.sectionsContainer}>
+          <View style={[styles.sectionsContainer, { paddingBottom: 110 + insets.bottom }]}>
             {/* Quick Actions */}
             <View style={styles.sectionContainer}>
               <Text style={styles.sectionHeader}>Quick Actions</Text>
               <View style={styles.actionsRow}>
                 {/* Action 1 */}
                 <TouchableOpacity
-                  style={[styles.actionCard, !currentCoords && { opacity: 0.5 }]}
+                  style={[styles.actionCard, !isGpsActive && { opacity: 0.5 }]}
                   activeOpacity={0.8}
                   onPress={() => setActiveTab('Scan')}
-                  disabled={!currentCoords}
+                  disabled={!isGpsActive}
                 >
                   <View style={styles.actionIconWrapper}>
                     <QrIcon color="#6236FF" />
@@ -896,9 +907,9 @@ export default function IndexScreen() {
 
                 {/* Action 2 */}
                 <TouchableOpacity
-                  style={[styles.actionCard, !currentCoords && { opacity: 0.5 }]}
+                  style={[styles.actionCard, !isGpsActive && { opacity: 0.5 }]}
                   activeOpacity={0.8}
-                  disabled={!currentCoords}
+                  disabled={!isGpsActive}
                 >
                   <View style={styles.actionIconWrapper}>
                     <PenIcon color="#6236FF" />
@@ -908,9 +919,9 @@ export default function IndexScreen() {
 
                 {/* Action 3 */}
                 <TouchableOpacity
-                  style={[styles.actionCard, !currentCoords && { opacity: 0.5 }]}
+                  style={[styles.actionCard, !isGpsActive && { opacity: 0.5 }]}
                   activeOpacity={0.8}
-                  disabled={!currentCoords}
+                  disabled={!isGpsActive}
                 >
                   <View style={styles.actionIconWrapper}>
                     <KeypadIcon color="#6236FF" />
@@ -1022,7 +1033,7 @@ export default function IndexScreen() {
 
       {/* Premium Navigation Footer */}
       {activeTab !== 'Scan' && activeTab !== 'Notifications' && (
-        <View style={styles.tabBar}>
+        <View style={[styles.tabBar, { height: 76 + insets.bottom, paddingBottom: insets.bottom }]}>
           <TouchableOpacity
             style={[styles.tabItem, activeTab === 'Home' && styles.activeTabBg]}
             onPress={() => setActiveTab('Home')}
@@ -1033,10 +1044,9 @@ export default function IndexScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.tabItem, activeTab === 'Task' && styles.activeTabBg, !currentCoords && { opacity: 0.4 }]}
+            style={[styles.tabItem, activeTab === 'Task' && styles.activeTabBg]}
             onPress={() => setActiveTab('Task')}
             activeOpacity={0.8}
-            disabled={!currentCoords}
           >
             <TaskTabIcon color={activeTab === 'Task' ? '#6236FF' : '#8A94A6'} />
             {activeTab === 'Task' && <Text style={styles.activeTabText}>Task</Text>}

@@ -12,6 +12,7 @@ import Animated, {
   FadeInUp,
   Layout 
 } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 
@@ -35,6 +36,7 @@ const ClockOutIcon = ({ color = '#8E9AA6' }) => (
 );
 
 export default function HistoryScreen({ activities }) {
+  const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState('All');
 
   // Filter activities based on selection
@@ -88,7 +90,7 @@ export default function HistoryScreen({ activities }) {
 
       {/* Scrollable list */}
       <ScrollView 
-        contentContainerStyle={styles.scrollContent} 
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 96 + insets.bottom }]} 
         showsVerticalScrollIndicator={false}
       >
         {filteredActivities.length === 0 ? (

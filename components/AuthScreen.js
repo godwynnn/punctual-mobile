@@ -13,7 +13,7 @@ import {
   ActivityIndicator
 } from 'react-native';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   FadeInRight,
   FadeInLeft,
@@ -102,6 +102,7 @@ const ShieldCheckIcon = ({ color = '#10B981' }) => (
 );
 
 export default function AuthScreen() {
+  const insets = useSafeAreaInsets();
   const [view, setView] = useState('login'); // 'login' or 'register'
 
   // Login Form States
@@ -195,7 +196,7 @@ export default function AuthScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: 96 + insets.bottom }]} showsVerticalScrollIndicator={false}>
 
           {/* Brand Header */}
           <View style={styles.brandHeader}>
@@ -432,7 +433,7 @@ export default function AuthScreen() {
       </KeyboardAvoidingView>
 
       {/* Footer Navigation Active Tab Bar */}
-      <View style={styles.footerTabBar}>
+      <View style={[styles.footerTabBar, { height: 76 + insets.bottom, paddingBottom: insets.bottom }]}>
         <TouchableOpacity
           style={[styles.footerTabItem, view === 'login' && styles.activeTabBg]}
           onPress={() => setView('login')}
