@@ -24,14 +24,26 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true,
+      "edgeToEdgeEnabled": false,
       "package": "com.godwynn.mobile"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-font"
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow PunctualHr to access your location to verify clock-in/out coordinates."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow PunctualHr to use the camera to scan QR codes for attendance verification."
+        }
+      ]
     ],
     "extra": {
       "eas": {

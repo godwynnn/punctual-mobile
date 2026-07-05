@@ -10,7 +10,8 @@ import {
   Platform,
   Dimensions,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  Image
 } from 'react-native';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -200,10 +201,14 @@ export default function AuthScreen() {
 
           {/* Brand Header */}
           <View style={styles.brandHeader}>
-            <View style={styles.brandLogoBg}>
-              <FingerprintLogo color="#6236FF" />
-            </View>
-            <Text style={styles.brandName}>puntua HR</Text>
+            {/* <View style={styles.brandLogoBg}> */}
+            <Image
+              source={require('../assets/logo_2.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+            {/* </View> */}
+            <Text style={styles.brandName}>punctuahr</Text>
           </View>
 
           {/* Card Container */}
@@ -473,16 +478,16 @@ const styles = StyleSheet.create({
     paddingBottom: 96,
   },
   brandHeader: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
     marginVertical: 20,
   },
   brandLogoBg: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: '#EBE9FE',
+    width: 60,
+    height: 60,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#6236FF',
@@ -491,11 +496,16 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
+  logoImage: {
+    width: 60,
+    height: 48,
+    borderRadius: 12,
+  },
   brandName: {
     fontFamily: 'Urbanist_700Bold',
-    fontSize: 20,
+    fontSize: 16,
     color: '#6236FF',
-    marginLeft: 10,
+    marginTop: 8,
   },
   cardContainer: {
     backgroundColor: '#FFFFFF',
